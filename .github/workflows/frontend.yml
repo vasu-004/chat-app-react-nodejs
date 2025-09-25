@@ -1,4 +1,4 @@
-name: Build and Upload to S3
+name: Build and Deploy to S3
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build-and-upload:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -53,6 +53,15 @@ jobs:
             echo "Bucket $BUCKET_NAME already exists."
           fi
 
+          # Block all public access
+          aws s3api put-public-access-block --bucket "$BUCKET_NAME" \
+            --public-access-block-configuration '{
+              "BlockPublicAcls": true,
+              "IgnorePublicAcls": true,
+              "BlockPublicPolicy": true,
+              "RestrictPublicBuckets": true
+            }'
+
       - name: Package build folder into ZIP
         run: |
           cd public
@@ -64,4 +73,4 @@ jobs:
 
       - name: Upload build folder to S3
         run: |
-          aws s3 sync public/build s3://${{ secrets.S3_BUCKET_NAME }}/build --delete
+          aws s3 sync public/build s3://${{ secrets.S3_BUCKET_NAME }} --delete
