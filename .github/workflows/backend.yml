@@ -3,7 +3,7 @@ name: Build & Push Backend with Docker Compose
 on:
   push:
     branches:
-      - main  # your default branch
+      - main  # or your default branch
 
 jobs:
   build-and-push:
@@ -25,17 +25,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR Public
-        run: |
-          aws ecr-public get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin public.ecr.aws
-
-      - name: Set up Docker Compose
-        run: |
-          docker-compose --version
+      - name: Show Docker version
+        run: docker --version
 
       - name: Build all services with Docker Compose
         run: |
-          docker-compose -f docker-compose.yml build
+          docker compose -f docker-compose.yml build
 
       - name: Tag backend image for ECR Public
         run: |
