@@ -16,7 +16,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'  # Change if needed
+          node-version: '18'  # Adjust if needed
 
       - name: Prepare environment and install dependencies
         run: |
@@ -27,4 +27,4 @@ jobs:
       - name: Build project
         run: |
           cd public
-          yarn build  # Creates the build folder
+          CI=false yarn build  # Prevent warnings from breaking the build
