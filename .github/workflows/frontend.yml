@@ -1,4 +1,4 @@
-name: Build and Upload to S3
+name: Build and Upload ZIP to S3
 
 on:
   push:
@@ -61,7 +61,3 @@ jobs:
       - name: Upload ZIP to S3
         run: |
           aws s3 cp public/build.zip s3://${{ secrets.S3_BUCKET_NAME }}/build-$(date +%Y%m%d%H%M%S).zip
-
-      - name: Upload build folder to S3
-        run: |
-          aws s3 sync public/build s3://${{ secrets.S3_BUCKET_NAME }}/build --delete
