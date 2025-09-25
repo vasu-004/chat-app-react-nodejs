@@ -62,12 +62,21 @@ jobs:
               "RestrictPublicBuckets": true
             }'
 
+      - name: Package build folder into ZIP
+        run: |
+          cd public
+          zip -r build.zip build
+
+      - name: Upload ZIP to S3
+        run: |
+          aws s3 cp public/build.zip s3://${{ secrets.S3_BUCKET_NAME }}/build-$(date +%Y%m%d%H%M%S).zip
+
       - name: Create or get CloudFront Distribution
         id: cloudfront
         run: |
           BUCKET_NAME="${{ secrets.S3_BUCKET_NAME }}"
 
-          # Create OAI (Origin Access Identity) if not exists
+          # Create OAI if not exists
           OAI_ID=$(aws cloudfront list-cloud-front-origin-access-identities \
             --query "CloudFrontOriginAccessIdentityList.Items[0].Id" --output text)
           if [ "$OAI_ID" = "None" ] || [ -z "$OAI_ID" ]; then
@@ -77,7 +86,7 @@ jobs:
           fi
           echo "OAI_ID=$OAI_ID" >> $GITHUB_ENV
 
-          # Update bucket policy to allow CloudFront OAI
+          # Update bucket policy for CloudFront OAI
           OAI_CANONICAL=$(aws cloudfront get-cloud-front-origin-access-identity \
             --id $OAI_ID --query "CloudFrontOriginAccessIdentity.S3CanonicalUserId" --output text)
           POLICY=$(cat <<EOF
@@ -99,7 +108,7 @@ jobs:
           echo "$POLICY" > policy.json
           aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy file://policy.json
 
-          # Check if CloudFront distribution already exists
+          # Check if CloudFront distribution exists
           DIST_ID=$(aws cloudfront list-distributions \
             --query "DistributionList.Items[?Origins.Items[?DomainName=='$BUCKET_NAME.s3.amazonaws.com']].Id" \
             --output text)
@@ -137,7 +146,7 @@ jobs:
 
           echo "DIST_ID=$DIST_ID" >> $GITHUB_ENV
 
-      - name: Upload build folder to S3
+      - name: Upload build folder to S3 (for CloudFront)
         run: |
           aws s3 sync public/build s3://${{ secrets.S3_BUCKET_NAME }} --delete
 
@@ -151,4 +160,4 @@ jobs:
         run: |
           CLOUDFRONT_DOMAIN=$(aws cloudfront get-distribution --id $DIST_ID \
             --query "Distribution.DomainName" --output text)
-          echo "✅ Your app is live at: https://$CLOUDFRONT_DOMAIN"
+          echo "Your app is live at: https://$CLOUDFRONT_DOMAIN"
