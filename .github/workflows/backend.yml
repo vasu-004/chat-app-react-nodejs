@@ -3,7 +3,7 @@ name: Build & Push Backend with Docker Compose
 on:
   push:
     branches:
-      - main  # or your default branch
+      - main  # change if your default branch is different
 
 jobs:
   build-and-push:
@@ -11,13 +11,15 @@ jobs:
 
     env:
       AWS_REGION: us-east-1
-      ECR_PUBLIC_REPO_NAME: react_backend
+      ECR_PUBLIC_URI: public.ecr.aws/e0b3f6o5/react_backend
       IMAGE_TAG: ${{ github.sha }}
 
     steps:
+      # 1. Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # 2. Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -25,17 +27,28 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # 3. Show Docker version (optional)
       - name: Show Docker version
         run: docker --version
 
+      # 4. Build all services using Docker Compose
       - name: Build all services with Docker Compose
         run: |
           docker compose -f docker-compose.yml build
 
-      - name: Tag backend image for ECR Public
+      # 5. Tag backend image with both commit SHA and latest
+      - name: Tag backend image
         run: |
-          docker tag react_backend_api:$IMAGE_TAG public.ecr.aws/<your-aws-account-alias>/$ECR_PUBLIC_REPO_NAME:$IMAGE_TAG
+          docker tag react_backend_api:$IMAGE_TAG $ECR_PUBLIC_URI:$IMAGE_TAG
+          docker tag react_backend_api:$IMAGE_TAG $ECR_PUBLIC_URI:latest
 
-      - name: Push backend image to ECR Public
+      # 6. Login to ECR Public
+      - name: Login to Amazon ECR Public
         run: |
-          docker push public.ecr.aws/<your-aws-account-alias>/$ECR_PUBLIC_REPO_NAME:$IMAGE_TAG
+          aws ecr-public get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin public.ecr.aws
+
+      # 7. Push backend image to ECR Public
+      - name: Push backend image
+        run: |
+          docker push $ECR_PUBLIC_URI:$IMAGE_TAG
+          docker push $ECR_PUBLIC_URI:latest
