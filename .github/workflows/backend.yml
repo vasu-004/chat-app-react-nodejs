@@ -1,4 +1,4 @@
-name: Build & Push Backend with Docker Compose
+name: Build & Push Backend Docker Image
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
       IMAGE_TAG: ${{ github.sha }}
 
     steps:
-      # 1. Checkout the repository
+      # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -27,28 +27,27 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # 3. Show Docker version (optional)
+      # 3. Show Docker version
       - name: Show Docker version
         run: docker --version
 
-      # 4. Build all services using Docker Compose
-      - name: Build all services with Docker Compose
+      # 4. Build backend Docker image
+      - name: Build backend Docker image
         run: |
-          docker compose build
+          docker build -t react_backend:$IMAGE_TAG .
 
-      # 5. Tag backend image with commit SHA and latest
+      # 5. Tag image for ECR Public
       - name: Tag backend image
         run: |
-          # Backend image is built with name react_backend_api:latest
-          docker tag react_backend_api:latest $ECR_PUBLIC_URI:$IMAGE_TAG
-          docker tag react_backend_api:latest $ECR_PUBLIC_URI:latest
+          docker tag react_backend:$IMAGE_TAG $ECR_PUBLIC_URI:$IMAGE_TAG
+          docker tag react_backend:$IMAGE_TAG $ECR_PUBLIC_URI:latest
 
       # 6. Login to ECR Public
       - name: Login to Amazon ECR Public
         run: |
           aws ecr-public get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin public.ecr.aws
 
-      # 7. Push backend image to ECR Public
+      # 7. Push image to ECR Public
       - name: Push backend image
         run: |
           docker push $ECR_PUBLIC_URI:$IMAGE_TAG
