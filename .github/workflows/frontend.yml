@@ -1,4 +1,4 @@
-name: Build and Deploy React App to S3 + CloudFront (OAC)
+name: Build and Deploy to S3 + CloudFront
 
 on:
   push:
@@ -8,9 +8,6 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
-    env:
-      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
     steps:
       - name: Checkout repository
@@ -39,7 +36,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Create S3 bucket if not exists
+           - name: Create S3 bucket if not exists
         run: |
           BUCKET_NAME="${{ secrets.S3_BUCKET_NAME }}"
           REGION="${{ secrets.AWS_REGION }}"
