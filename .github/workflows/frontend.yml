@@ -1,0 +1,30 @@
+name: Build Project
+
+on:
+  push:
+    branches:
+      - main  # Trigger on push to main branch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'  # Change if needed
+
+      - name: Prepare environment and install dependencies
+        run: |
+          cd public
+          mv .env.example .env
+          yarn
+
+      - name: Build project
+        run: |
+          cd public
+          yarn build  # Creates the build folder
