@@ -1,18 +1,17 @@
-name: Build & Push react_backend to ECR Public
+name: Build & Push Backend with Docker Compose
 
 on:
   push:
     branches:
-      - main  # or your default branch
+      - main  # your default branch
 
 jobs:
   build-and-push:
-    name: Build Docker Image and Push to ECR Public
     runs-on: ubuntu-latest
 
     env:
-      AWS_REGION: us-east-1  # change if needed
-      ECR_PUBLIC_REPO_NAME: react_backend  # your repo name
+      AWS_REGION: us-east-1
+      ECR_PUBLIC_REPO_NAME: react_backend
       IMAGE_TAG: ${{ github.sha }}
 
     steps:
@@ -27,18 +26,21 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR Public
-        id: ecr-login
         run: |
           aws ecr-public get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin public.ecr.aws
-          
-      - name: Build Docker image
-        run: |
-          docker build -t $ECR_PUBLIC_REPO_NAME:$IMAGE_TAG .
 
-      - name: Tag Docker image for ECR Public
+      - name: Set up Docker Compose
         run: |
-          docker tag $ECR_PUBLIC_REPO_NAME:$IMAGE_TAG public.ecr.aws/<your-aws-account-alias>/$ECR_PUBLIC_REPO_NAME:$IMAGE_TAG
-          
-      - name: Push Docker image to ECR Public
+          docker-compose --version
+
+      - name: Build all services with Docker Compose
+        run: |
+          docker-compose -f docker-compose.yml build
+
+      - name: Tag backend image for ECR Public
+        run: |
+          docker tag react_backend_api:$IMAGE_TAG public.ecr.aws/<your-aws-account-alias>/$ECR_PUBLIC_REPO_NAME:$IMAGE_TAG
+
+      - name: Push backend image to ECR Public
         run: |
           docker push public.ecr.aws/<your-aws-account-alias>/$ECR_PUBLIC_REPO_NAME:$IMAGE_TAG
