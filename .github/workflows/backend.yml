@@ -34,13 +34,14 @@ jobs:
       # 4. Build all services using Docker Compose
       - name: Build all services with Docker Compose
         run: |
-          docker compose -f docker-compose.yml build
+          docker compose build
 
-      # 5. Tag backend image with both commit SHA and latest
+      # 5. Tag backend image with commit SHA and latest
       - name: Tag backend image
         run: |
-          docker tag react_backend_api:$IMAGE_TAG $ECR_PUBLIC_URI:$IMAGE_TAG
-          docker tag react_backend_api:$IMAGE_TAG $ECR_PUBLIC_URI:latest
+          # Backend image is built with name react_backend_api:latest
+          docker tag react_backend_api:latest $ECR_PUBLIC_URI:$IMAGE_TAG
+          docker tag react_backend_api:latest $ECR_PUBLIC_URI:latest
 
       # 6. Login to ECR Public
       - name: Login to Amazon ECR Public
