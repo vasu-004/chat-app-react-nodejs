@@ -53,8 +53,7 @@ jobs:
             echo "Bucket $BUCKET_NAME already exists."
           fi
 
-          # Make bucket private
-          aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy '{}'
+          # Block all public access
           aws s3api put-public-access-block --bucket "$BUCKET_NAME" \
             --public-access-block-configuration '{
               "BlockPublicAcls": true,
@@ -67,12 +66,11 @@ jobs:
         id: cloudfront
         run: |
           BUCKET_NAME="${{ secrets.S3_BUCKET_NAME }}"
-          REGION="${{ secrets.AWS_REGION }}"
 
           # Create OAI (Origin Access Identity) if not exists
           OAI_ID=$(aws cloudfront list-cloud-front-origin-access-identities \
             --query "CloudFrontOriginAccessIdentityList.Items[0].Id" --output text)
-          if [ "$OAI_ID" = "None" ]; then
+          if [ "$OAI_ID" = "None" ] || [ -z "$OAI_ID" ]; then
             OAI_ID=$(aws cloudfront create-cloud-front-origin-access-identity \
               --cloud-front-origin-access-identity-config CallerReference=$(date +%s),Comment="OAI for $BUCKET_NAME" \
               --query "CloudFrontOriginAccessIdentity.Id" --output text)
@@ -106,7 +104,7 @@ jobs:
             --query "DistributionList.Items[?Origins.Items[?DomainName=='$BUCKET_NAME.s3.amazonaws.com']].Id" \
             --output text)
 
-          if [ -z "$DIST_ID" ]; then
+          if [ -z "$DIST_ID" ] || [ "$DIST_ID" = "None" ]; then
             echo "Creating CloudFront distribution..."
             DIST_ID=$(aws cloudfront create-distribution \
               --distribution-config "{
