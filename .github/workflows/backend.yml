@@ -1,9 +1,9 @@
-name: Build & Push Backend Docker Image
+name: Build & Push Backend with Docker Compose
 
 on:
   push:
     branches:
-      - main  # change if your default branch is different
+      - main
 
 jobs:
   build-and-push:
@@ -31,23 +31,24 @@ jobs:
       - name: Show Docker version
         run: docker --version
 
-      # 4. Build backend Docker image
-      - name: Build backend Docker image
+      # 4. Build containers with Docker Compose (no cache)
+      - name: Build containers
         run: |
-          docker build -t react_backend:$IMAGE_TAG .
+          docker compose build --no-cache
 
-      # 5. Tag image for ECR Public
+      # 5. Tag backend image
       - name: Tag backend image
         run: |
-          docker tag react_backend:$IMAGE_TAG $ECR_PUBLIC_URI:$IMAGE_TAG
-          docker tag react_backend:$IMAGE_TAG $ECR_PUBLIC_URI:latest
+          # Ensure your docker-compose.yml specifies image name: react_backend_api for backend
+          docker tag react_backend_api:latest $ECR_PUBLIC_URI:$IMAGE_TAG
+          docker tag react_backend_api:latest $ECR_PUBLIC_URI:latest
 
       # 6. Login to ECR Public
       - name: Login to Amazon ECR Public
         run: |
           aws ecr-public get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin public.ecr.aws
 
-      # 7. Push image to ECR Public
+      # 7. Push backend image to ECR Public
       - name: Push backend image
         run: |
           docker push $ECR_PUBLIC_URI:$IMAGE_TAG
