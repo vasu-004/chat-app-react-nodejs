@@ -10,50 +10,113 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # 2️⃣ Set up Node.js
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'  # Adjust if needed
+          node-version: '18'
 
-      - name: Prepare environment and install dependencies
+      # 3️⃣ Cache Yarn dependencies
+      - name: Cache Yarn dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/yarn
+            node_modules
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+
+      # 4️⃣ Install dependencies
+      - name: Install dependencies
         run: |
-          cd public
-          mv .env.example .env
-          yarn
+          # Ensure working from repo root
+          mv public/.env.example public/.env || true
+          yarn --cwd public
 
+      # 5️⃣ Build React project
       - name: Build project
         run: |
-          cd public
-          CI=false yarn build  # Prevent warnings from breaking the build
+          NODE_ENV=production CI=false yarn --cwd public build
 
+      # 6️⃣ Configure AWS credentials
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Create S3 bucket if not exists
+      # 7️⃣ Create S3 bucket if it doesn't exist
+      - name: Create S3 bucket
         run: |
-          BUCKET_NAME="${{ secrets.S3_BUCKET_NAME }}"
-          REGION="${{ secrets.AWS_REGION }}"
-          
-          # Check if bucket exists
-          if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
-            echo "Creating bucket $BUCKET_NAME in region $REGION..."
-            if [ "$REGION" = "us-east-1" ]; then
-              aws s3api create-bucket --bucket "$BUCKET_NAME" --region "$REGION"
-            else
-              aws s3api create-bucket --bucket "$BUCKET_NAME" --region "$REGION" \
-                --create-bucket-configuration LocationConstraint="$REGION"
-            fi
-          else
-            echo "Bucket $BUCKET_NAME already exists."
+          BUCKET_NAME="my-react-frontend"
+          echo "BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
+
+          if ! aws s3api head-bucket --bucket $BUCKET_NAME 2>/dev/null; then
+            aws s3api create-bucket \
+              --bucket $BUCKET_NAME \
+              --region ${{ secrets.AWS_REGION }} \
+              --create-bucket-configuration LocationConstraint=${{ secrets.AWS_REGION }}
           fi
 
-      - name: Upload build folder to S3
+          aws s3api put-public-access-block \
+            --bucket $BUCKET_NAME \
+            --public-access-block-configuration '{
+              "BlockPublicAcls": true,
+              "IgnorePublicAcls": true,
+              "BlockPublicPolicy": true,
+              "RestrictPublicBuckets": true
+            }'
+
+      # 8️⃣ Attach bucket policy for CloudFront
+      - name: Attach bucket policy
         run: |
-          aws s3 sync public/build s3://${{ secrets.S3_BUCKET_NAME }} --delete
+          BUCKET_NAME=$BUCKET_NAME
+          CLOUDFRONT_ID=${{ secrets.CLOUDFRONT_ID }}
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          CLOUDFRONT_ARN="arn:aws:cloudfront::${ACCOUNT_ID}:distribution/${CLOUDFRONT_ID}"
+
+          POLICY=$(cat <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowCloudFrontServicePrincipalRead",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "cloudfront.amazonaws.com"
+      },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::$BUCKET_NAME/*",
+      "Condition": {
+        "StringEquals": {
+          "AWS:SourceArn": "$CLOUDFRONT_ARN"
+        }
+      }
+    }
+  ]
+}
+EOF
+          )
+
+          echo "$POLICY" > bucket-policy.json
+          aws s3api put-bucket-policy --bucket $BUCKET_NAME --policy file://bucket-policy.json
+
+      # 9️⃣ Upload React build to S3
+      - name: Upload build to S3
+        run: |
+          aws s3 sync public/build/ s3://$BUCKET_NAME --delete
+
+      # 🔟 Invalidate CloudFront cache
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_ID }} \
+            --paths "/*"
+
+      # 1️⃣1️⃣ Print deployed URL
+      - name: Print deployed URL
+        run: echo "https://$BUCKET_NAME.s3.${{ secrets.AWS_REGION }}.amazonaws.com"
