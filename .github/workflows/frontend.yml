@@ -1,4 +1,4 @@
-name: Build and Deploy to S3 + CloudFront
+name: Build and Upload to S3
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
+  build-and-upload:
     runs-on: ubuntu-latest
 
     steps:
@@ -53,15 +53,6 @@ jobs:
             echo "Bucket $BUCKET_NAME already exists."
           fi
 
-          # Block all public access
-          aws s3api put-public-access-block --bucket "$BUCKET_NAME" \
-            --public-access-block-configuration '{
-              "BlockPublicAcls": true,
-              "IgnorePublicAcls": true,
-              "BlockPublicPolicy": true,
-              "RestrictPublicBuckets": true
-            }'
-
       - name: Package build folder into ZIP
         run: |
           cd public
@@ -71,93 +62,6 @@ jobs:
         run: |
           aws s3 cp public/build.zip s3://${{ secrets.S3_BUCKET_NAME }}/build-$(date +%Y%m%d%H%M%S).zip
 
-      - name: Create or get CloudFront Distribution
-        id: cloudfront
+      - name: Upload build folder to S3
         run: |
-          BUCKET_NAME="${{ secrets.S3_BUCKET_NAME }}"
-
-          # Create OAI if not exists
-          OAI_ID=$(aws cloudfront list-cloud-front-origin-access-identities \
-            --query "CloudFrontOriginAccessIdentityList.Items[0].Id" --output text)
-          if [ "$OAI_ID" = "None" ] || [ -z "$OAI_ID" ]; then
-            OAI_ID=$(aws cloudfront create-cloud-front-origin-access-identity \
-              --cloud-front-origin-access-identity-config CallerReference=$(date +%s),Comment="OAI for $BUCKET_NAME" \
-              --query "CloudFrontOriginAccessIdentity.Id" --output text)
-          fi
-          echo "OAI_ID=$OAI_ID" >> $GITHUB_ENV
-
-          # Update bucket policy for CloudFront OAI
-          OAI_CANONICAL=$(aws cloudfront get-cloud-front-origin-access-identity \
-            --id $OAI_ID --query "CloudFrontOriginAccessIdentity.S3CanonicalUserId" --output text)
-          POLICY=$(cat <<EOF
-          {
-            "Version": "2012-10-17",
-            "Statement": [
-              {
-                "Effect": "Allow",
-                "Principal": {
-                  "CanonicalUser": "$OAI_CANONICAL"
-                },
-                "Action": "s3:GetObject",
-                "Resource": "arn:aws:s3:::$BUCKET_NAME/*"
-              }
-            ]
-          }
-          EOF
-          )
-          echo "$POLICY" > policy.json
-          aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy file://policy.json
-
-          # Check if CloudFront distribution exists
-          DIST_ID=$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[?Origins.Items[?DomainName=='$BUCKET_NAME.s3.amazonaws.com']].Id" \
-            --output text)
-
-          if [ -z "$DIST_ID" ] || [ "$DIST_ID" = "None" ]; then
-            echo "Creating CloudFront distribution..."
-            DIST_ID=$(aws cloudfront create-distribution \
-              --distribution-config "{
-                \"CallerReference\": \"$(date +%s)\",
-                \"Origins\": {
-                  \"Items\": [
-                    {
-                      \"Id\": \"$BUCKET_NAME-origin\",
-                      \"DomainName\": \"$BUCKET_NAME.s3.amazonaws.com\",
-                      \"S3OriginConfig\": {\"OriginAccessIdentity\": \"origin-access-identity/cloudfront/$OAI_ID\"}
-                    }
-                  ],
-                  \"Quantity\": 1
-                },
-                \"DefaultCacheBehavior\": {
-                  \"TargetOriginId\": \"$BUCKET_NAME-origin\",
-                  \"ViewerProtocolPolicy\": \"redirect-to-https\",
-                  \"AllowedMethods\": {\"Quantity\": 2, \"Items\": [\"GET\",\"HEAD\"]},
-                  \"ForwardedValues\": {\"QueryString\": false, \"Cookies\": {\"Forward\": \"none\"}},
-                  \"TrustedSigners\": {\"Enabled\": false, \"Quantity\": 0},
-                  \"MinTTL\": 0,
-                  \"DefaultTTL\": 86400,
-                  \"MaxTTL\": 31536000
-                },
-                \"Enabled\": true,
-                \"Comment\": \"CloudFront for $BUCKET_NAME\"
-              }" \
-              --query "Distribution.Id" --output text)
-          fi
-
-          echo "DIST_ID=$DIST_ID" >> $GITHUB_ENV
-
-      - name: Upload build folder to S3 (for CloudFront)
-        run: |
-          aws s3 sync public/build s3://${{ secrets.S3_BUCKET_NAME }} --delete
-
-      - name: Invalidate CloudFront cache
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id $DIST_ID \
-            --paths "/*"
-
-      - name: Show CloudFront URL
-        run: |
-          CLOUDFRONT_DOMAIN=$(aws cloudfront get-distribution --id $DIST_ID \
-            --query "Distribution.DomainName" --output text)
-          echo "Your app is live at: https://$CLOUDFRONT_DOMAIN"
+          aws s3 sync public/build s3://${{ secrets.S3_BUCKET_NAME }}/build --delete
