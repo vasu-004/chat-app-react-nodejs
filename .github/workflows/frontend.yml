@@ -91,7 +91,7 @@ jobs:
           fi
           echo "OAC_ID=$OAC_ID" >> $GITHUB_ENV
 
-          # 2. Create or get CloudFront Distribution
+          # 2. Create or get CloudFront distribution
           DIST_ID=$(aws cloudfront list-distributions \
             --query "DistributionList.Items[?Origins.Items[?DomainName=='$BUCKET_NAME.s3.amazonaws.com']].Id" \
             --output text)
@@ -129,7 +129,7 @@ jobs:
           echo "DIST_ID=$DIST_ID" >> $GITHUB_ENV
 
           # 3. Attach bucket policy for OAC
-          POLICY=$(cat <<EOF
+          cat > policy.json <<POLICY
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -147,9 +147,8 @@ jobs:
     }
   ]
 }
-EOF
-)
-          echo "$POLICY" > policy.json
+POLICY
+
           aws s3api put-bucket-policy --bucket "$BUCKET_NAME" --policy file://policy.json
 
       - name: Upload build folder to S3
