@@ -40,7 +40,6 @@ jobs:
         run: |
           BUCKET_NAME="${{ secrets.S3_BUCKET_NAME }}"
           REGION="${{ secrets.AWS_REGION }}"
-
           if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
             echo "Creating bucket $BUCKET_NAME in region $REGION..."
             if [ "$REGION" = "us-east-1" ]; then
@@ -52,7 +51,6 @@ jobs:
           else
             echo "Bucket $BUCKET_NAME already exists."
           fi
-
           # Block all public access
           aws s3api put-public-access-block --bucket "$BUCKET_NAME" \
             --public-access-block-configuration '{
@@ -61,15 +59,6 @@ jobs:
               "BlockPublicPolicy": true,
               "RestrictPublicBuckets": true
             }'
-
-      - name: Package build folder into ZIP
-        run: |
-          cd public
-          zip -r build.zip build
-
-      - name: Upload ZIP to S3
-        run: |
-          aws s3 cp public/build.zip s3://${{ secrets.S3_BUCKET_NAME }}/build-$(date +%Y%m%d%H%M%S).zip
 
       - name: Upload build folder to S3
         run: |
