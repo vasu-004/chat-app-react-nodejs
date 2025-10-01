@@ -11,7 +11,7 @@ jobs:
 
     env:
       AWS_REGION: us-east-1
-      ECR_PUBLIC_URI: public.ecr.aws/e0b3f6o5/react_backend
+      ECR_PUBLIC_URI: public.ecr.aws/e0b3f6o5/db-publice-backend
       IMAGE_TAG: ${{ github.sha }}
 
     steps:
